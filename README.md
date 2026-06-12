@@ -66,19 +66,6 @@ confidence level, and a short reasoning paragraph.
 
 ---
 
-## Running locally
-
-Open index.html via a local server — required because the app fetches 
-system-prompt.txt and flows.txt as local files and browsers block 
-direct file fetches for security reasons.
-
-The easiest way is the Live Server extension in VS Code. Click 
-"Go Live" in the bottom bar and the app opens automatically.
-
-Add your Anthropic API key when prompted in the app.
-
----
-
 ## How the tool reasons
 
 The tool reasons from two sources:
