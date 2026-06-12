@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PM Brainstorm</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>PM Brainstorm</h1>
+      <p>Paste a ticket or feature description to get started.</p>
+    </header>
+
+    <div class="card">
+      <div class="nature-selector">
+        <label class="field-label">Nature of Change</label>
+        <div class="nature-options">
+          <label class="nature-option"><input type="radio" name="nature" value="Configuration change only"><span>Configuration change only</span></label>
+          <label class="nature-option"><input type="radio" name="nature" value="Existing integration change"><span>Existing integration change</span></label>
+          <label class="nature-option"><input type="radio" name="nature" value="New integration or connection"><span>New integration or connection</span></label>
+          <label class="nature-option"><input type="radio" name="nature" value="Schema or data change"><span>Schema or data change</span></label>
+          <label class="nature-option"><input type="radio" name="nature" value="New build / net new capability"><span>New build / net new capability</span></label>
+          <label class="nature-option"><input type="radio" name="nature" value="Unknown / not sure"><span>Unknown / not sure</span></label>
+        </div>
+        <div id="nature-warning" class="nature-warning" hidden>
+          Selecting Unknown will result in a more conservative assessment. Try to clarify the nature of the change before submitting.
+        </div>
+      </div>
+
+      <label for="input">Ticket or Feature Description</label>
+      <textarea
+        id="input"
+        placeholder="Describe your feature or ticket. For a better assessment include:
+                      - What the feature does and who it serves
+                      - Which systems or services are likely involved
+                      - What is explicitly out of scope
+                      - Geographic scope if relevant
+                      - Any known constraints or dependencies"
+        spellcheck="true"
+      ></textarea>
+      <div class="actions">
+        <button id="submit-btn" onclick="handleSubmit()">Analyze</button>
+      </div>
+      <div class="status">
+        <div class="spinner" id="spinner"></div>
+        <span id="status-text"></span>
+      </div>
+    </div>
+
+    <div id="output-section">
+      <div class="card">
+        <div class="output-header">
+          <label style="margin-bottom:0">Output</label>
+          <button id="download-btn" class="secondary-btn" type="button" hidden>Download report</button>
+        </div>
+        <div id="output"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

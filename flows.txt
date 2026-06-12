@@ -1,0 +1,390 @@
+
+PLATFORM FLOW DIAGRAMS AND SYSTEM TOPOLOGY
+
+Before assessing any dimension, identify which flows in this section are touched 
+by the brief. Name them explicitly in your assessment. If a flow is marked 
+TO BE POPULATED, flag that the assessment is limited for that flow and ask the 
+PM to confirm which systems are involved.
+
+---
+
+CORE PAYMENT FLOWS
+
+
+STANDARD CNP SALE — WITH 3DS
+Completed integration — use as reference for blast radius assessment.
+
+Sequential flow:
+1. Customer enters card details at checkout
+2. Internal 3DS service authenticates the PAN
+3. Auth request submitted to IPS with 3DS fields:
+   ECI | DS transaction ID | authentication value | message version
+4. IPS submits auth request to acquirer → scheme network
+5. Auth response returned to merchant
+
+Key dependencies:
+- 3DS is performed by the internal 3DS service — not a third party 
+  and no Netcetera involvement. Internal team ownership. Any change 
+  touching 3DS auth is a cross-team internal dependency.
+- Netcetera is CTP only — do not flag Netcetera involvement for 
+  standard card payment flows.
+- ECI, DS transaction ID, and authentication value must all be present 
+  in the auth request — missing any of these fields shifts liability 
+  back to the merchant.
+- channel: CNP | entry_mode: ECOM must be set correctly — wrong 
+  channel flags cause acquirer processing errors.
+- 3DS simulation in test environment does not replicate production 
+  behaviour — gaps may only surface in production.
+
+---
+
+STANDARD CNP SALE — WITHOUT 3DS
+Completed integration — use as reference for blast radius assessment.
+
+Sequential flow:
+1. Customer enters card details at checkout
+2. Auth request submitted directly to IPS — no 3DS fields present
+3. IPS submits auth request to acquirer → scheme network
+4. Auth response returned to merchant
+
+Key dependencies:
+- No 3DS fields in the auth request — do not flag 3DS involvement 
+  for non-3DS flows.
+- channel: CNP | entry_mode: ECOM must be set correctly.
+- Liability sits with the merchant on non-authenticated transactions 
+  — any change that shifts more traffic to this path has a fraud and 
+  chargeback risk implication.
+- Acquirer acceptance rates may differ for non-3DS traffic — flag 
+  if a change affects the volume of non-authenticated transactions.
+
+STANDARD CARD PAYMENT VIA HPP — WITH 3DS
+Completed integration — use as reference for blast radius assessment.
+
+Sequential flow:
+1. Merchant creates HPP link via /ucp/links API — generates unique 
+   payment URL with order, payer, and transaction configuration
+2. Customer redirected to HPP URL
+3. Customer enters card details on HPP
+4. Internal 3DS service authenticates the PAN
+   authentication.preference can be set: CHALLENGE_PREFERRED or 
+   NO_PREFERENCE — issuer may override
+5. HPP submits auth request to IPS with 3DS fields:
+   ECI | DS transaction ID | authentication value | message version
+6. IPS submits auth to acquirer → scheme network
+7. Transaction response sent to merchant return_url
+8. HPP renders return_url content — merchant handles redirect to 
+   success or failure page
+
+Key dependencies:
+- HPP link expires after 24 hours and is single use only — 
+   any change to link generation or expiry affects all HPP merchants.
+- return_url and status_url are merchant-configured — status_url 
+   is only used for APM transactions, not card payments.
+- 3DS preference is set at link creation — CHALLENGE_PREFERRED is 
+   the default. Issuer can override regardless of merchant preference.
+- Internal 3DS service handles authentication — no Netcetera 
+   involvement in standard HPP card flows.
+- channel: CNP | entry_mode: ECOM set automatically by HPP — 
+   merchants do not need to set these manually.
+- card storage can be enabled at link creation via 
+   order.payment_method_configuration.storage_mode: ALWAYS or PROMPT.
+- 3DS simulation in test environment does not replicate production 
+   behaviour — gaps may only surface in production.
+
+---
+
+STANDARD CARD PAYMENT VIA HPP — NON-3DS
+Completed integration — use as reference for blast radius assessment.
+
+Sequential flow:
+1. Merchant creates HPP link via /ucp/links API — generates unique 
+   payment URL with order and transaction configuration
+2. Customer redirected to HPP URL
+3. Customer enters card details on HPP
+4. HPP submits auth request directly to IPS — no 3DS fields
+5. IPS submits auth to acquirer → scheme network
+6. Transaction response sent to merchant return_url
+7. HPP renders return_url content — merchant handles redirect
+
+Key dependencies:
+- No 3DS fields in the auth request — do not flag 3DS involvement 
+   for non-3DS HPP flows.
+- Liability sits with the merchant on non-authenticated transactions.
+- HPP link is single use and expires after 24 hours — same as 3DS flow.
+- channel: CNP | entry_mode: ECOM set automatically by HPP.
+- allowed_payment_methods controls which payment options are shown — 
+   a change here affects the customer-facing checkout experience 
+   for all merchants using that configuration.
+
+---
+
+STORED CREDENTIAL FLOWS
+
+CARDHOLDER INITIATED TRANSACTION (CIT) — CARD STORAGE
+Completed integration — use as reference for blast radius assessment.
+
+Sequential flow:
+1. Customer initiates payment
+2. Internal 3DS service authenticates the PAN — challenge mandated,
+   SCA is required on all CIT first transactions
+3. Auth request submitted to IPS with COF flags:
+   type: oneoff | initiator: cardholder | sequence: first
+   Plus 3DS fields: ECI, DS transaction ID, authentication value
+4. Scheme network processes auth and returns SRD in response
+5. SRD stored against the card record for use in subsequent MITs
+6. Card and payer record stored
+
+Key dependencies:
+- HPP automatically sets COF flags for first and subsequent CIT 
+  payments — merchants using API or third party card storage must 
+  set these manually.
+- Challenge mandated flag must be set on all CIT first transactions 
+  — this is what gives the merchant authority to process subsequent 
+  MITs. Missing this flag breaks the entire recurring chain.
+- SRD is returned by the scheme and stored against the card — any 
+  change to how SRD is captured or stored affects all subsequent MITs 
+  on that card.
+
+MERCHANT INITIATED TRANSACTION (MIT) — SUBSEQUENT PAYMENT
+Completed integration — use as reference for blast radius assessment.
+
+Sequential flow:
+1. Merchant triggers payment — no customer involvement required
+2. Auth request submitted to IPS with COF flags:
+   type: recurring | initiator: merchant | sequence: subsequent
+   Plus SRD from the original CIT transaction
+3. Scheme network processes auth
+4. Auth response returned to merchant
+
+Key dependencies:
+- 3DS is not required — MIT is out of scope for SCA. Do not flag 
+  3DS involvement for MIT flows.
+- SRD is mandatory for MIT subsequent payments — if SRD was not 
+  captured or stored correctly in the CIT, the MIT will fail.
+- If a successful auth has already taken place on the stored card, 
+  the platform automatically appends the stored SRD — merchants 
+  can omit the SRD field in this case.
+- COF flags must be correctly set — wrong initiator or sequence 
+  values will cause scheme mandate non-compliance.
+
+PAYER TOKEN / CARD ON FILE — MERCHANT INITIATED TRANSACTION (MIT)
+[TO BE POPULATED]
+
+ACCOUNT UPDATER — BATCH CARD REFRESH CYCLE
+[TO BE POPULATED]
+
+---
+
+NETWORK TOKEN FLOWS
+
+NETWORK TOKEN PROVISIONING
+Not a standalone flow — provisioning happens as part of the card storage 
+process. Any ticket touching card storage must assess whether network token 
+provisioning is affected. Provisioning involves VTS (Visa) and MDES 
+(Mastercard) and carries scheme certification risk.
+
+NETWORK TOKEN — CUSTOMER INITIATED TRANSACTION (CIT)
+Completed integration — use as reference for blast radius assessment.
+
+Sequential flow:
+1. Customer initiates payment
+2. Internal 3DS service authenticates — cryptogram and ECI generated
+3. Auth request submitted to IPS with network token fields:
+   network_token | network_token_expiry_month | network_token_expiry_year
+   Plus cryptogram and ECI from 3DS authentication
+   initiator: PAYER | stored_credential.sequence: SUBSEQUENT
+4. IPS submits auth to acquirer → scheme network using DPAN
+5. Auth response returned to merchant
+
+Key dependencies:
+- Network token use is controlled at merchant account level — must 
+  be explicitly enabled. Do not assume all merchants use network tokens.
+- Cryptogram is required for CIT network token transactions — it is 
+  generated as part of the 3DS authentication step. Missing cryptogram 
+  will cause auth failure.
+- usage_mode: USE_NETWORK_TOKEN must be set on the payment method 
+  token — if not set, the platform will use the PAN instead.
+- DPAN behaviour in test environments must be mocked — live cryptogram 
+  validation only possible in production.
+- Any change to how the network token or cryptogram is passed to IPS 
+  affects all merchants with network tokenisation enabled.
+
+NETWORK TOKEN — MERCHANT INITIATED TRANSACTION (MIT)
+Completed integration — use as reference for blast radius assessment.
+
+Sequential flow:
+1. Merchant triggers payment — no customer involvement required
+2. Auth request submitted to IPS with network token fields:
+   network_token | network_token_expiry_month | network_token_expiry_year
+   initiator: MERCHANT | stored_credential.model: RECURRING
+   stored_credential.reason: INCREMENTAL | sequence: SUBSEQUENT
+3. No cryptogram required — MIT is out of scope for SCA
+4. IPS submits auth to acquirer → scheme network using DPAN
+5. Auth response returned to merchant
+
+Key dependencies:
+- 3DS and cryptogram are not required — MIT network token transactions 
+  are out of scope for SCA. Do not flag 3DS involvement for MIT flows.
+- stored_credential fields must be correctly set — wrong model, reason, 
+  or sequence values cause scheme mandate non-compliance.
+- Network token must be valid and current — token expiry between 
+  billing cycles will cause auth failure. Account Updater does not 
+  cover network token refresh in real time (batch only).
+- Any change to how the network token is resolved or passed affects 
+  all merchants using network tokenisation for recurring billing.
+
+NETWORK TOKEN USE IN TRANSACTION FLOWS
+Not a separate flow — network tokens are used transparently in standard 
+transaction flows when enabled at merchant account level. The DPAN replaces 
+the PAN in the auth request. Assess network token impact on any ticket 
+touching auth flow or merchant account configuration.
+
+Key dependencies:
+- Network token use is controlled at merchant account level — a change to 
+  account configuration can silently enable or disable network token use 
+  for all transactions on that account.
+- Token provisioning is triggered by card storage — any change to the card 
+  storage flow must assess whether VTS/MDES provisioning is affected.
+- Merchants must have network tokenisation enabled explicitly — do not 
+  assume all merchants use network tokens.
+
+---
+
+WALLET FLOWS
+
+CLICK TO PAY FLOW (HPP via Netcetera)
+IMPORTANT: Netcetera is the CTP SDK and scheme connector only. 
+It has no involvement in standard card payment flows, HPP card 
+flows, or API checkout flows. Only flag Netcetera when the ticket 
+explicitly involves Click to Pay or in-browser Google Pay.
+
+Completed integration — use as reference for blast radius assessment.
+
+Sequential flow — each step gates the next:
+1. Customer at checkout → Netcetera SDK launches CTP modal
+2. Netcetera connects to scheme (Visa/Mastercard) → retrieves customer's 
+   stored cards
+3. Customer selects a card (PAN) from the drawer
+4. Internal 3DS service authenticates the PAN — flow does not proceed 
+   until 3DS is complete
+5. Scheme encrypts the payload (DPAN + cryptogram) via Netcetera
+6. Encrypted payload sent to WDS for decryption
+7. WDS returns DPAN + cryptogram in plain form
+8. IPS submits auth request to scheme network
+9. Auth response returned to merchant
+
+Key dependencies:
+- Netcetera is the CTP SDK and scheme connector — not a 3DS processor. 
+  Any change to CTP modal behaviour or card selection touches Netcetera.
+- Internal 3DS service is a hard sequential dependency — 3DS failure 
+  stops the flow before WDS is involved. Not a third party — internal 
+  team ownership.
+- WDS is a hard dependency for decryption — without it the payload is 
+  unreadable. Not internal to HPP or IPS — its own discrete service.
+- Customers always select a card (PAN), never a token — 3DS must always 
+  be performed before tokenisation occurs.
+- DPAN behaviour in test environments must be mocked — live cryptogram 
+  validation only possible in production.
+- CTP=true is an internal reporting tag only — it does not travel to the 
+  scheme in the auth request. Any change touching this flag affects internal 
+  reporting and reconciliation systems only. Do not flag scheme involvement 
+  on the basis of this tag alone.
+
+APPLE PAY FLOW (HPP)
+Completed integration — use as reference for blast radius assessment.
+
+Sequential flow:
+1. Customer visits HPP — Apple Pay button displayed if device and 
+   merchant are eligible
+2. Customer selects Apple Pay button — Apple payment sheet launches
+3. Customer authenticates via Face ID / Touch ID within Apple ecosystem
+4. Apple generates encrypted token payload
+5. Customer redirected back to HPP
+6. HPP sends encrypted payload to WDS for decryption
+7. WDS returns decrypted payload
+8. IPS submits auth request to scheme network with Apple Pay indicators
+9. Auth response returned to merchant
+
+Key dependencies:
+- 3DS is bypassed entirely — Apple Pay transactions are considered 
+  authenticated within Apple's ecosystem. Do not flag 3DS involvement 
+  for Apple Pay flows.
+- Auth message contains authMobile: Apple as a specific data field — 
+  any change to how wallet indicators are constructed or passed affects 
+  all Apple Pay transactions. Treat this field as a downstream contract.
+- WDS handles Apple Pay decryption — same service as CTP but different 
+  payload format. Any change to WDS affects both CTP and Apple Pay flows.
+- HPP holds all Apple Pay merchant certificates centrally — merchants 
+  do not manage their own certificates. Enabling Apple Pay for a new 
+  merchant is an HPP configuration change, not a merchant-side operation.
+- Iframe and lightbox implementations require a shared well-known file 
+  for Apple Pay domain verification — this is a deployment dependency 
+  that must be confirmed before go-live for any non-standard HPP 
+  integration.
+- DPAN behaviour in test environments must be mocked — live Apple Pay 
+  cryptogram validation only possible in production.
+
+GOOGLE PAY FLOW (HPP)
+Completed integration — use as reference for blast radius assessment.
+
+Two distinct paths depending on context:
+
+IN-APP / ON-DEVICE
+Follows the same pattern as Apple Pay. Customer selects Google Pay, 
+authenticates within Google's ecosystem, encrypted token payload sent 
+to WDS for decryption, auth submitted with authMobile: Google. 3DS 
+bypassed — transaction considered authenticated within Google's ecosystem.
+
+IN-BROWSER
+Follows the same pattern as Click to Pay. Google Pay in browser 
+behaves more like a wallet drawer than a device-bound payment. 
+Treat as CTP flow for complexity assessment purposes — assess 
+Netcetera involvement, 3DS requirement, and scheme connectivity 
+accordingly.
+
+Key dependencies:
+- WDS handles decryption for both paths — blast radius across CTP, 
+  Apple Pay, and Google Pay if WDS changes.
+- Auth message contains authMobile: Google for in-app/on-device 
+  transactions — same field pattern as Apple Pay, different value.
+- In-browser Google Pay shares complexity profile with CTP — do not 
+  treat it as a simple wallet flow if the ticket involves browser 
+  checkout.
+- When a ticket mentions Google Pay without specifying context, ask 
+  whether it is in-app/on-device or in-browser — the complexity 
+  profile is materially different.
+
+---
+
+ACQUIRING FLOWS
+
+TRANSACTION VIA AGGREGATOR ACQUIRER
+[TO BE POPULATED]
+
+TRANSACTION VIA DIRECT ACQUIRER CONNECTION
+[TO BE POPULATED]
+
+TRANSACTION VIA WHITE LABEL PARTNER GATEWAY
+[TO BE POPULATED]
+
+---
+
+EXCEPTION AND LIFECYCLE FLOWS
+
+3DS FALLBACK — WHERE 3DS FAILS AND TRANSACTION CONTINUES
+[TO BE POPULATED]
+
+DECLINE AND RETRY PATH
+[TO BE POPULATED]
+
+REFUND AND REVERSAL FLOW
+[TO BE POPULATED]
+
+---
+
+CARD STORAGE FLOWS
+
+CARD STORAGE PROCESS — INITIAL CARD SAVE
+[TO BE POPULATED]
+
+---
