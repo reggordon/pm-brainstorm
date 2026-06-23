@@ -1,3 +1,223 @@
+// ─── Mode toggle ─────────────────────────────────────────────────────────────
+
+function setMode(mode) {
+  const prebriefPanel = document.getElementById('prebrief-panel');
+  const analyzePanel  = document.getElementById('analyze-panel');
+  const btnBrainstorm = document.getElementById('mode-brainstorm');
+  const btnAnalyze    = document.getElementById('mode-analyze');
+
+  if (mode === 'brainstorm') {
+    prebriefPanel.hidden = false;
+    analyzePanel.hidden  = true;
+    btnBrainstorm.classList.add('active');
+    btnAnalyze.classList.remove('active');
+  } else {
+    prebriefPanel.hidden = true;
+    analyzePanel.hidden  = false;
+    btnBrainstorm.classList.remove('active');
+    btnAnalyze.classList.add('active');
+  }
+}
+
+// ─── Pre-brief ───────────────────────────────────────────────────────────────
+
+let prebriefQuestions = [];
+
+const CHANGE_TYPES = [
+  'Configuration change only',
+  'Existing integration change',
+  'New integration or connection',
+  'Schema or data change',
+  'New build / net new capability',
+  'Unknown / not sure',
+];
+
+function inferChangeTypeFromIdea(ideaText) {
+  const text = (ideaText || '').toLowerCase();
+  if (!text) return 'Unknown / not sure';
+
+  if (/schema|table|column|field|database|migration|etl|payload|data model/.test(text)) {
+    return 'Schema or data change';
+  }
+  if (/integrat|api|webhook|partner|third[- ]?party|connector|sftp/.test(text)) {
+    return 'New integration or connection';
+  }
+  if (/config|toggle|flag|setting|rule|parameter/.test(text)) {
+    return 'Configuration change only';
+  }
+  if (/new feature|build|create|launch|new capability|greenfield/.test(text)) {
+    return 'New build / net new capability';
+  }
+  if (/existing|modify|update|change/.test(text)) {
+    return 'Existing integration change';
+  }
+
+  return 'Unknown / not sure';
+}
+
+function fallbackQuestions(ideaText) {
+  const text = (ideaText || '').trim();
+  const about = text ? ` for "${text.slice(0, 120)}${text.length > 120 ? '...' : ''}"` : '';
+  return [
+    `Who is the primary user impacted${about}, and what outcome should improve for them?`,
+    'Which specific systems, services, and data objects are in scope for this change?',
+    'What is explicitly out of scope for this first release?',
+    'What constraints matter most (deadline, compliance, dependencies, or resourcing)?',
+    'How will we measure success after release (metrics, threshold, and timeline)?',
+  ];
+}
+
+function parseBrainstormResponse(text, ideaText) {
+  const raw = String(text || '');
+  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  // Find a known change type anywhere in the response.
+  let changeType = '';
+  for (const type of CHANGE_TYPES) {
+    const re = new RegExp(type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    if (re.test(raw)) {
+      changeType = type;
+      break;
+    }
+  }
+
+  // Collect candidate questions from numbered lines, bullets, or any line ending in '?'.
+  const candidates = [];
+  for (const line of lines) {
+    const numbered = line.match(/^\d+[.)]\s+(.+)/);
+    const bulleted = line.match(/^[-*]\s+(.+)/);
+    const fromPattern = numbered?.[1] || bulleted?.[1] || line;
+    const cleaned = fromPattern
+      .replace(/^clarifying questions:?/i, '')
+      .replace(/^change type:?/i, '')
+      .trim();
+
+    if (!cleaned) continue;
+    if (/\?$/.test(cleaned)) {
+      candidates.push(cleaned);
+      continue;
+    }
+    if (numbered || bulleted) {
+      candidates.push(cleaned.endsWith('?') ? cleaned : `${cleaned}?`);
+    }
+  }
+
+  // De-duplicate and keep at most 5 useful-looking questions.
+  const deduped = [];
+  const seen = new Set();
+  for (const q of candidates) {
+    const key = q.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(q);
+    if (deduped.length === 5) break;
+  }
+
+  const questions = deduped.length >= 3
+    ? deduped.slice(0, 5)
+    : fallbackQuestions(ideaText);
+
+  return {
+    changeType: changeType || inferChangeTypeFromIdea(ideaText),
+    questions,
+  };
+}
+
+function renderQuestions(questions) {
+  const container = document.getElementById('questions-list');
+  container.innerHTML = '';
+  prebriefQuestions = questions;
+
+  questions.forEach((q, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'question-item';
+
+    const label = document.createElement('label');
+    label.className = 'question-label';
+    label.htmlFor = `q-${i}`;
+    label.textContent = q;
+
+    const input = document.createElement('textarea');
+    input.id = `q-${i}`;
+    input.className = 'question-answer';
+    input.rows = 2;
+    input.placeholder = 'Your answer…';
+
+    wrap.appendChild(label);
+    wrap.appendChild(input);
+    container.appendChild(wrap);
+  });
+}
+
+async function handlePreBrief() {
+  const input = document.getElementById('prebrief-input').value.trim();
+  if (!input) return;
+
+  const btn      = document.getElementById('prebrief-btn');
+  const spinner  = document.getElementById('prebrief-spinner');
+  const status   = document.getElementById('prebrief-status');
+  const qSection = document.getElementById('questions-section');
+
+  btn.disabled = true;
+  spinner.classList.add('visible');
+  status.textContent = 'Thinking…';
+  qSection.hidden = true;
+
+  try {
+    const response = await fetch('/api/brainstorm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: input }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${response.status}`);
+    }
+
+    const data = await response.json();
+    const { changeType, questions } = parseBrainstormResponse(data.text, input);
+
+    document.getElementById('suggested-type').textContent = changeType || 'Unknown / not sure';
+    renderQuestions(questions);
+    qSection.hidden = false;
+    status.textContent = '';
+  } catch (err) {
+    status.textContent = `Error: ${err.message}`;
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('visible');
+  }
+}
+
+function handleBuildBrief() {
+  const roughIdea = document.getElementById('prebrief-input').value.trim();
+  const answers = prebriefQuestions.map((q, i) => {
+    const val = document.getElementById(`q-${i}`)?.value.trim();
+    return val ? `${q}\n${val}` : null;
+  }).filter(Boolean);
+
+  // Pre-select nature radio if suggested type matches one of the options
+  const suggested = document.getElementById('suggested-type').textContent;
+  document.querySelectorAll('input[name="nature"]').forEach(radio => {
+    if (radio.value.toLowerCase() === suggested.toLowerCase()) {
+      radio.checked = true;
+      radio.dispatchEvent(new Event('change'));
+    }
+  });
+
+  // Compose the full brief text
+  const brief = [
+    roughIdea,
+    answers.length ? '\nAdditional context from pre-brief:\n' + answers.join('\n\n') : '',
+  ].join('\n').trim();
+
+  document.getElementById('input').value = brief;
+  setMode('analyze');
+  document.getElementById('input').focus();
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const SECTION_HEADERS = [
@@ -367,3 +587,6 @@ document.querySelectorAll('input[name="nature"]').forEach(radio => {
     warning.hidden = radio.value !== 'Unknown / not sure';
   });
 });
+
+document.getElementById('mode-brainstorm').addEventListener('click', () => setMode('brainstorm'));
+document.getElementById('mode-analyze').addEventListener('click', () => setMode('analyze'));

@@ -13,7 +13,51 @@
       <p>Paste a ticket or feature description to get started.</p>
     </header>
 
-    <div class="card">
+    <!-- Mode toggle -->
+    <div class="mode-toggle">
+      <button id="mode-brainstorm" class="mode-btn active" type="button">Pre-brief</button>
+      <button id="mode-analyze" class="mode-btn" type="button">Full analysis</button>
+    </div>
+
+    <!-- Pre-brief panel -->
+    <div id="prebrief-panel">
+      <div class="card">
+        <label for="prebrief-input">Rough idea</label>
+        <textarea
+          id="prebrief-input"
+          placeholder="Describe your idea in a sentence or two. Don't worry about completeness — that's what this step is for."
+          spellcheck="true"
+        ></textarea>
+        <div class="actions">
+          <button id="prebrief-btn" type="button" onclick="handlePreBrief()">Explore idea</button>
+        </div>
+        <div class="status">
+          <div class="spinner" id="prebrief-spinner"></div>
+          <span id="prebrief-status"></span>
+        </div>
+      </div>
+
+      <div id="questions-section" hidden>
+        <div class="card">
+          <div class="prebrief-header">
+            <div>
+              <div class="subsection-label">Suggested change type</div>
+              <div id="suggested-type" class="suggested-type-text"></div>
+            </div>
+          </div>
+          <div class="subsection-label" style="margin-top:20px">Clarifying questions</div>
+          <p class="prebrief-hint">Answer as many as you can. Leave blank if you don't know yet.</p>
+          <div id="questions-list"></div>
+          <div class="actions" style="margin-top:20px">
+            <button id="build-brief-btn" type="button" onclick="handleBuildBrief()">Build full brief &rarr;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Full analysis panel -->
+    <div id="analyze-panel" hidden>
+      <div class="card">
       <div class="nature-selector">
         <label class="field-label">Nature of Change</label>
         <div class="nature-options">
@@ -41,11 +85,12 @@
         spellcheck="true"
       ></textarea>
       <div class="actions">
-        <button id="submit-btn" onclick="handleSubmit()">Analyze</button>
-      </div>
-      <div class="status">
-        <div class="spinner" id="spinner"></div>
-        <span id="status-text"></span>
+          <button id="submit-btn" onclick="handleSubmit()">Analyze</button>
+        </div>
+        <div class="status">
+          <div class="spinner" id="spinner"></div>
+          <span id="status-text"></span>
+        </div>
       </div>
     </div>
 
