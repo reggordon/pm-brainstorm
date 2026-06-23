@@ -17,6 +17,7 @@
     <div class="mode-toggle">
       <button id="mode-brainstorm" class="mode-btn active" type="button">Pre-brief</button>
       <button id="mode-analyze" class="mode-btn" type="button">Full analysis</button>
+      <button id="mode-deliverables" class="mode-btn" type="button">Deliverables</button>
     </div>
 
     <!-- Pre-brief panel -->
@@ -74,6 +75,7 @@
       </div>
 
       <label for="input">Ticket or Feature Description</label>
+      <p class="learning-note">Learning mode: this output is designed to teach PM scoping and questioning, not replace engineering discovery.</p>
       <textarea
         id="input"
         placeholder="Describe your feature or ticket. For a better assessment include:
@@ -90,6 +92,26 @@
         <div class="status">
           <div class="spinner" id="spinner"></div>
           <span id="status-text"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deliverables panel -->
+    <div id="deliverables-panel" hidden>
+      <div class="card">
+        <label for="deliverables-input">Brief</label>
+        <p class="learning-note">Learning mode: treat these as practice deliverables you can refine, not a complete implementation plan.</p>
+        <textarea
+          id="deliverables-input"
+          placeholder="Paste the product brief. Include users, problem, scope, and desired impact."
+          spellcheck="true"
+        ></textarea>
+        <div class="actions">
+          <button id="deliverables-btn" type="button" onclick="handleDeliverablesSubmit()">Generate deliverables</button>
+        </div>
+        <div class="status">
+          <div class="spinner" id="deliverables-spinner"></div>
+          <span id="deliverables-status"></span>
         </div>
       </div>
     </div>
