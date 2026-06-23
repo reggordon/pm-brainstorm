@@ -8,6 +8,7 @@ const ROOT = __dirname;
 const SYSTEM_PROMPT_PATH = process.env.SYSTEM_PROMPT_PATH || path.join(ROOT, 'system-prompt.txt');
 const FLOWS_PATH = process.env.FLOWS_PATH || path.join(ROOT, 'flows.txt');
 const BRAINSTORM_PROMPT_PATH = path.join(ROOT, 'brainstorm-prompt.txt');
+const DELIVERABLES_PROMPT_PATH = path.join(ROOT, 'deliverables-prompt.txt');
 
 let SYSTEM_PROMPT = '';
 try {
@@ -28,6 +29,13 @@ try {
   BRAINSTORM_PROMPT = fs.readFileSync(BRAINSTORM_PROMPT_PATH, 'utf-8');
 } catch (err) {
   console.warn(`Warning: failed to load brainstorm prompt from ${BRAINSTORM_PROMPT_PATH}: ${err.message}`);
+}
+
+let DELIVERABLES_PROMPT = '';
+try {
+  DELIVERABLES_PROMPT = fs.readFileSync(DELIVERABLES_PROMPT_PATH, 'utf-8');
+} catch (err) {
+  console.warn(`Warning: failed to load deliverables prompt from ${DELIVERABLES_PROMPT_PATH}: ${err.message}`);
 }
 
 const FULL_SYSTEM_PROMPT = FLOWS
@@ -191,10 +199,69 @@ async function handleBrainstorm(req, res) {
   });
 }
 
+async function handleDeliverables(req, res) {
+  if (!API_KEY) {
+    sendJson(res, 500, { error: { message: 'Server missing ANTHROPIC_API_KEY environment variable.' } });
+    return;
+  }
+
+  if (!DELIVERABLES_PROMPT) {
+    sendJson(res, 500, { error: { message: 'Server missing deliverables prompt.' } });
+    return;
+  }
+
+  let rawBody = '';
+  req.on('data', (chunk) => { rawBody += chunk; });
+
+  req.on('end', async () => {
+    try {
+      const body = JSON.parse(rawBody || '{}');
+      const userText = String(body.text || '').trim();
+
+      if (!userText) {
+        sendJson(res, 400, { error: { message: 'Missing required field: text' } });
+        return;
+      }
+
+      const upstream = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': API_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1500,
+          system: DELIVERABLES_PROMPT,
+          messages: [{ role: 'user', content: userText }],
+        }),
+      });
+
+      const data = await upstream.json().catch(() => ({}));
+
+      if (!upstream.ok) {
+        sendJson(res, upstream.status, { error: { message: data.error?.message || `Anthropic API error ${upstream.status}` } });
+        return;
+      }
+
+      const text = data.content?.[0]?.text;
+      if (!text) {
+        sendJson(res, 502, { error: { message: 'Anthropic response missing content text.' } });
+        return;
+      }
+
+      sendJson(res, 200, { text });
+    } catch (err) {
+      sendJson(res, 400, { error: { message: `Invalid request body: ${err.message}` } });
+    }
+  });
+}
+
 function serveStatic(req, res) {
   const requestPath = req.url === '/' ? '/index.html' : req.url;
 
-  if (requestPath === '/system-prompt.txt' || requestPath === '/flows.txt' || requestPath === '/brainstorm-prompt.txt') {
+  if (requestPath === '/system-prompt.txt' || requestPath === '/flows.txt' || requestPath === '/brainstorm-prompt.txt' || requestPath === '/deliverables-prompt.txt') {
     sendJson(res, 403, { error: { message: 'Forbidden' } });
     return;
   }
@@ -232,6 +299,11 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'POST' && req.url === '/api/analyze') {
     handleAnalyze(req, res);
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/api/deliverables') {
+    handleDeliverables(req, res);
     return;
   }
 

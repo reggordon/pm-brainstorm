@@ -3,19 +3,32 @@
 function setMode(mode) {
   const prebriefPanel = document.getElementById('prebrief-panel');
   const analyzePanel  = document.getElementById('analyze-panel');
+  const deliverablesPanel = document.getElementById('deliverables-panel');
   const btnBrainstorm = document.getElementById('mode-brainstorm');
   const btnAnalyze    = document.getElementById('mode-analyze');
+  const btnDeliverables = document.getElementById('mode-deliverables');
 
   if (mode === 'brainstorm') {
     prebriefPanel.hidden = false;
     analyzePanel.hidden  = true;
+    deliverablesPanel.hidden = true;
     btnBrainstorm.classList.add('active');
     btnAnalyze.classList.remove('active');
+    btnDeliverables.classList.remove('active');
+  } else if (mode === 'deliverables') {
+    prebriefPanel.hidden = true;
+    analyzePanel.hidden  = true;
+    deliverablesPanel.hidden = false;
+    btnBrainstorm.classList.remove('active');
+    btnAnalyze.classList.remove('active');
+    btnDeliverables.classList.add('active');
   } else {
     prebriefPanel.hidden = true;
     analyzePanel.hidden  = false;
+    deliverablesPanel.hidden = true;
     btnBrainstorm.classList.remove('active');
     btnAnalyze.classList.add('active');
+    btnDeliverables.classList.remove('active');
   }
 }
 
@@ -255,6 +268,8 @@ const RATING_CLASS = {
   UNKNOWN: 'rating-unknown',
 };
 
+const DELIVERABLE_HEADERS = ['DELIVERABLES', 'BUILD ELEMENTS', 'OUTCOMES'];
+
 // ─── Markdown helpers ─────────────────────────────────────────────────────────
 
 function stripAsterisks(text) {
@@ -276,6 +291,7 @@ function renderMarkdown(text) {
 
 let latestAnalysisText = '';
 let latestRenderedSections = [];
+let latestReportType = 'analysis';
 
 // ─── Parsing ─────────────────────────────────────────────────────────────────
 
@@ -297,8 +313,88 @@ function parseResponse(text) {
   return sections;
 }
 
+function parseNamedSections(text, headers) {
+  const sections = [];
+  const upper = text.toUpperCase();
+
+  for (let i = 0; i < headers.length; i++) {
+    const header = headers[i];
+    const start = upper.indexOf(header);
+    if (start === -1) continue;
+
+    let end = text.length;
+    for (let j = 0; j < headers.length; j++) {
+      if (j === i) continue;
+      const next = upper.indexOf(headers[j], start + header.length);
+      if (next !== -1 && next < end) end = next;
+    }
+
+    sections.push({ header, content: text.slice(start + header.length, end).trim() });
+  }
+
+  return sections;
+}
+
 function extractSections(text) {
   return parseResponse(text);
+}
+
+function extractDeliverableSections(text) {
+  return parseNamedSections(text, DELIVERABLE_HEADERS);
+}
+
+function normalizeDeliverableLine(line) {
+  const cleaned = line
+    .replace(/^[-*]\s+/, '')
+    .replace(/^\d+[.)]\s+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleaned) return '';
+
+  const fullPattern = /as\s+(.+?)\s*,?\s*i\s+want\s+(.+?)\s*,?\s*so\s+that\s+(.+)/i;
+  const fullMatch = cleaned.match(fullPattern);
+  if (fullMatch) {
+    return `AS ${fullMatch[1].trim()} I want ${fullMatch[2].trim()} So that ${fullMatch[3].trim()}`;
+  }
+
+  const soThatPattern = /(.+?)\s+so\s+that\s+(.+)/i;
+  const soThatMatch = cleaned.match(soThatPattern);
+  if (soThatMatch) {
+    const wantPart = soThatMatch[1].replace(/^as\s+.+?\s+i\s+want\s+/i, '').trim();
+    const outcomePart = soThatMatch[2].trim();
+    return `AS stakeholder I want ${wantPart} So that ${outcomePart}`;
+  }
+
+  return `AS stakeholder I want ${cleaned} So that we deliver a clear user outcome.`;
+}
+
+function parseDeliverableLines(text) {
+  const lines = String(text || '')
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line && !/^deliverables:?$/i.test(line));
+
+  const candidates = lines.filter(line => /^[-*]\s+/.test(line) || /^\d+[.)]\s+/.test(line));
+  const source = candidates.length ? candidates : lines;
+
+  return source
+    .map(normalizeDeliverableLine)
+    .filter(Boolean);
+}
+
+function parseBulletLines(text, sectionHeader) {
+  const lines = String(text || '')
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line && !new RegExp(`^${sectionHeader}:?$`, 'i').test(line));
+
+  const bullets = lines
+    .filter(line => /^[-*]\s+/.test(line) || /^\d+[.)]\s+/.test(line))
+    .map(line => line.replace(/^[-*]\s+/, '').replace(/^\d+[.)]\s+/, '').trim())
+    .filter(Boolean);
+
+  return bullets.length ? bullets : lines;
 }
 
 function parseDimensions(text) {
@@ -340,6 +436,44 @@ function parseDimensions(text) {
   return dims;
 }
 
+function extractTitledSection(text, title) {
+  const lines = String(text || '').split(/\r?\n/);
+  const upperTitle = title.toUpperCase();
+  const startIdx = lines.findIndex(line => line.trim().toUpperCase() === upperTitle);
+  if (startIdx === -1) return '';
+
+  const collected = [];
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (/^[A-Z][A-Z0-9\s/&()\-]{3,}$/.test(trimmed) && trimmed !== upperTitle) break;
+    collected.push(lines[i]);
+  }
+
+  return collected.join('\n').trim();
+}
+
+function extractBriefUnderstanding(text) {
+  const candidates = [
+    'BRIEF UNDERSTANDING',
+    'UNDERSTANDING OF BRIEF',
+    'BRIEF SUMMARY',
+  ];
+
+  for (const title of candidates) {
+    const content = extractTitledSection(text, title);
+    if (content) return content;
+  }
+
+  return '';
+}
+
+function buildBriefUnderstandingFromInput(inputBrief, natureOfChange) {
+  const raw = String(inputBrief || '').trim();
+  if (!raw) return '';
+
+  return raw;
+}
+
 // ─── Element helper ───────────────────────────────────────────────────────────
 
 function el(tag, className, textContent) {
@@ -351,11 +485,12 @@ function el(tag, className, textContent) {
 
 // ─── Rendering ───────────────────────────────────────────────────────────────
 
-function renderOutput(text, container) {
+function renderOutput(text, container, submittedBrief = '', natureOfChange = '') {
   const sections = extractSections(text);
   container.innerHTML = '';
   latestAnalysisText = text;
   latestRenderedSections = sections;
+  latestReportType = 'analysis';
   setDownloadState(true);
 
   if (!sections.length) {
@@ -366,6 +501,11 @@ function renderOutput(text, container) {
   }
 
   const sectionMap = Object.fromEntries(sections.map(s => [s.header, s.content]));
+  const briefUnderstanding = buildBriefUnderstandingFromInput(submittedBrief, natureOfChange);
+
+  if (briefUnderstanding) {
+    container.appendChild(renderBriefUnderstanding(briefUnderstanding));
+  }
 
   if (sectionMap['RECOMMENDED ACTION']) {
     container.appendChild(renderRecommendedAction(sectionMap['RECOMMENDED ACTION']));
@@ -391,6 +531,66 @@ function renderOutput(text, container) {
   });
 }
 
+function renderDeliverablesOutput(text, container) {
+  const sections = extractDeliverableSections(text);
+  container.innerHTML = '';
+  latestAnalysisText = text;
+  latestRenderedSections = sections;
+  latestReportType = 'deliverables';
+  setDownloadState(true);
+
+  if (!sections.length) {
+    const body = el('div', 'section-body');
+    body.innerHTML = renderMarkdown(text);
+    container.appendChild(body);
+    return;
+  }
+
+  const sectionMap = Object.fromEntries(sections.map(s => [s.header, s.content]));
+  const deliverables = parseDeliverableLines(sectionMap['DELIVERABLES'] || '');
+  const buildElements = parseBulletLines(sectionMap['BUILD ELEMENTS'] || '', 'BUILD ELEMENTS');
+  const outcomes = parseBulletLines(sectionMap['OUTCOMES'] || '', 'OUTCOMES');
+
+  if (!deliverables.length) {
+    const fallback = el('div', 'section-body');
+    fallback.innerHTML = renderMarkdown(text);
+    container.appendChild(fallback);
+    return;
+  }
+
+  const wrap = el('div', 'deliverables-linked');
+  wrap.appendChild(el('div', 'subsection-label', 'Linked Deliverables'));
+
+  const list = el('div', 'deliverables-linked-list');
+
+  deliverables.forEach((deliverable, index) => {
+    const card = el('div', 'deliverable-linked-card');
+
+    const title = el('div', 'deliverable-linked-title', `Deliverable ${index + 1}`);
+    card.appendChild(title);
+    card.appendChild(el('p', 'deliverable-linked-statement', deliverable));
+
+    const buildHeading = el('div', 'deliverable-linked-heading', 'Build Elements');
+    card.appendChild(buildHeading);
+    const buildList = el('ul', 'deliverable-linked-bullets');
+    const buildItemText = buildElements[index] || 'TBD - define build elements for this deliverable.';
+    buildList.appendChild(el('li', '', buildItemText));
+    card.appendChild(buildList);
+
+    const outcomesHeading = el('div', 'deliverable-linked-heading', 'Outcomes');
+    card.appendChild(outcomesHeading);
+    const outcomesList = el('ul', 'deliverable-linked-bullets');
+    const outcomeItemText = outcomes[index] || 'TBD - define measurable outcome for this deliverable.';
+    outcomesList.appendChild(el('li', '', outcomeItemText));
+    card.appendChild(outcomesList);
+
+    list.appendChild(card);
+  });
+
+  wrap.appendChild(list);
+  container.appendChild(wrap);
+}
+
 function renderRecommendedAction(content) {
   const wrap = el('div', 'result-action');
 
@@ -409,6 +609,17 @@ function renderRecommendedAction(content) {
     p.innerHTML = marked.parse(stripAsterisks(explanation));
     wrap.appendChild(p);
   }
+
+  return wrap;
+}
+
+function renderBriefUnderstanding(content) {
+  const wrap = el('div', 'brief-understanding');
+  wrap.appendChild(el('div', 'subsection-label', 'Brief Understanding'));
+
+  const body = el('div', 'brief-understanding-body');
+  body.textContent = content;
+  wrap.appendChild(body);
 
   return wrap;
 }
@@ -483,6 +694,7 @@ function renderError(message, container) {
   container.innerHTML = '';
   latestAnalysisText = '';
   latestRenderedSections = [];
+  latestReportType = 'analysis';
   setDownloadState(false);
   container.appendChild(el('div', 'section-error', message));
 }
@@ -512,7 +724,9 @@ function downloadReport() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'pm-brainstorm-analysis.txt';
+  link.download = latestReportType === 'deliverables'
+    ? 'pm-brainstorm-deliverables.txt'
+    : 'pm-brainstorm-analysis.txt';
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -526,6 +740,7 @@ async function handleSubmit() {
   if (!input) return;
 
   const selectedNature = document.querySelector('input[name="nature"]:checked');
+  const selectedNatureValue = selectedNature?.value || '';
   const naturePrefix = selectedNature
     ? `Nature of change: ${selectedNature.value}\n\n`
     : '';
@@ -543,7 +758,38 @@ async function handleSubmit() {
 
   try {
     const result = await analyze(naturePrefix + input);
-    renderOutput(result, output);
+    renderOutput(result, output, input, selectedNatureValue);
+    outputSection.classList.add('visible');
+    statusText.textContent = '';
+  } catch (err) {
+    renderError(`Error: ${err.message}`, output);
+    outputSection.classList.add('visible');
+    statusText.textContent = 'Request failed.';
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('visible');
+  }
+}
+
+async function handleDeliverablesSubmit() {
+  const input = document.getElementById('deliverables-input').value.trim();
+  if (!input) return;
+
+  const btn = document.getElementById('deliverables-btn');
+  const spinner = document.getElementById('deliverables-spinner');
+  const statusText = document.getElementById('deliverables-status');
+  const outputSection = document.getElementById('output-section');
+  const output = document.getElementById('output');
+
+  btn.disabled = true;
+  spinner.classList.add('visible');
+  statusText.textContent = 'Building deliverables…';
+  outputSection.classList.remove('visible');
+
+  try {
+    const result = await buildDeliverables(input);
+    renderDeliverablesOutput(result, output);
     outputSection.classList.add('visible');
     statusText.textContent = '';
   } catch (err) {
@@ -573,10 +819,30 @@ async function analyze(text) {
   return data.text;
 }
 
+async function buildDeliverables(text) {
+  const response = await fetch('/api/deliverables', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.text;
+}
+
 // ─── Events ───────────────────────────────────────────────────────────────────
 
 document.getElementById('input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmit();
+});
+
+document.getElementById('deliverables-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleDeliverablesSubmit();
 });
 
 document.getElementById('download-btn').addEventListener('click', downloadReport);
@@ -590,3 +856,4 @@ document.querySelectorAll('input[name="nature"]').forEach(radio => {
 
 document.getElementById('mode-brainstorm').addEventListener('click', () => setMode('brainstorm'));
 document.getElementById('mode-analyze').addEventListener('click', () => setMode('analyze'));
+document.getElementById('mode-deliverables').addEventListener('click', () => setMode('deliverables'));

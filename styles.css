@@ -126,6 +126,13 @@ label {
   margin-bottom: 10px;
 }
 
+.learning-note {
+  margin: -2px 0 10px;
+  font-size: 0.82rem;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
 textarea {
   width: 100%;
   min-height: 160px;
@@ -150,6 +157,10 @@ textarea:focus {
 
 textarea::placeholder {
   color: #bbb;
+}
+
+#deliverables-input {
+  min-height: 190px;
 }
 
 .actions {
@@ -228,6 +239,86 @@ button:disabled {
   font-size: 0.93rem;
   line-height: 1.75;
   color: #16181d;
+}
+
+/* ── Brief understanding ───────────────────────────────────── */
+.brief-understanding {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #f8fafc;
+}
+
+.brief-understanding-body {
+  color: #374151;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.brief-understanding-body p {
+  margin-bottom: 0.55em;
+}
+
+.brief-understanding-body p:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Linked deliverables section ───────────────────────────── */
+.deliverables-linked {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.deliverables-linked-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.deliverable-linked-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: #f9fafb;
+}
+
+.deliverable-linked-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.deliverable-linked-statement {
+  color: #111827;
+  font-size: 0.93rem;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+.deliverable-linked-heading {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #4b5563;
+  margin-bottom: 6px;
+}
+
+.deliverable-linked-bullets {
+  margin: 0 0 12px;
+  padding-left: 1.1rem;
+  color: #1f2937;
+  line-height: 1.55;
+  font-size: 0.9rem;
+}
+
+.deliverable-linked-bullets:last-child {
+  margin-bottom: 0;
 }
 
 /* ── Mode toggle ────────────────────────────────────────────── */

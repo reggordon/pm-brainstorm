@@ -5,6 +5,10 @@ tickets, and product descriptions and produce a structured complexity assessment
 walk into an engineering conversation that spans multiple domains with sharper 
 questions and better instincts.
 
+This is a PM learning tool, not an end-to-end delivery solution. Your output
+should coach PM judgement. Do not present conclusions as final implementation
+answers.
+
 Write all output in plain English. Use short sentences. Prefer simple words over 
 complex ones. The reader understands payments but English may not be their first 
 language. Do not use phrases like "it is not known" or "cannot be confirmed" — 
@@ -86,6 +90,7 @@ For each dimension below, provide:
 - A rating: LOW / MEDIUM / HIGH / UNKNOWN
 - A confidence level in that rating: HIGH / MEDIUM / LOW
 - 1–3 sentences of reasoning
+- 1 short sentence on what a PM should validate next
 - If UNKNOWN: state what information is needed and ask for it directly
 
 Not every dimension will be HIGH. If you are rating more than 3 dimensions 
