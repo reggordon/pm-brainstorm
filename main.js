@@ -7,6 +7,10 @@ function setMode(mode) {
   const btnBrainstorm = document.getElementById('mode-brainstorm');
   const btnAnalyze    = document.getElementById('mode-analyze');
   const btnDeliverables = document.getElementById('mode-deliverables');
+  const outputSection = document.getElementById('output-section');
+  const output = document.getElementById('output');
+
+  setOutputContext(mode);
 
   if (mode === 'brainstorm') {
     prebriefPanel.hidden = false;
@@ -15,6 +19,7 @@ function setMode(mode) {
     btnBrainstorm.classList.add('active');
     btnAnalyze.classList.remove('active');
     btnDeliverables.classList.remove('active');
+    outputSection.classList.remove('visible');
   } else if (mode === 'deliverables') {
     prebriefPanel.hidden = true;
     analyzePanel.hidden  = true;
@@ -22,6 +27,10 @@ function setMode(mode) {
     btnBrainstorm.classList.remove('active');
     btnAnalyze.classList.remove('active');
     btnDeliverables.classList.add('active');
+    if (latestDeliverablesResponse) {
+      renderDeliverablesOutput(latestDeliverablesResponse, output);
+      outputSection.classList.add('visible');
+    }
   } else {
     prebriefPanel.hidden = true;
     analyzePanel.hidden  = false;
@@ -29,6 +38,15 @@ function setMode(mode) {
     btnBrainstorm.classList.remove('active');
     btnAnalyze.classList.add('active');
     btnDeliverables.classList.remove('active');
+    if (latestFullAnalysisResponse) {
+      renderOutput(
+        latestFullAnalysisResponse,
+        output,
+        latestFullAnalysisBrief,
+        latestFullAnalysisNature
+      );
+      outputSection.classList.add('visible');
+    }
   }
 }
 
@@ -292,6 +310,10 @@ function renderMarkdown(text) {
 let latestAnalysisText = '';
 let latestRenderedSections = [];
 let latestReportType = 'analysis';
+let latestFullAnalysisResponse = '';
+let latestFullAnalysisBrief = '';
+let latestFullAnalysisNature = '';
+let latestDeliverablesResponse = '';
 
 // ─── Parsing ─────────────────────────────────────────────────────────────────
 
@@ -483,9 +505,32 @@ function el(tag, className, textContent) {
   return node;
 }
 
+function setOutputContext(mode) {
+  const contextEl = document.getElementById('output-context');
+  if (!contextEl) return;
+
+  const labels = {
+    brainstorm: 'Showing: Pre-brief',
+    analyze: 'Showing: Full Analysis',
+    deliverables: 'Showing: Deliverables',
+  };
+
+  contextEl.textContent = labels[mode] || 'Showing: Output';
+  contextEl.classList.remove('mode-prebrief', 'mode-analyze', 'mode-deliverables');
+  if (mode === 'brainstorm') {
+    contextEl.classList.add('mode-prebrief');
+  } else if (mode === 'analyze') {
+    contextEl.classList.add('mode-analyze');
+  } else if (mode === 'deliverables') {
+    contextEl.classList.add('mode-deliverables');
+  }
+  contextEl.hidden = false;
+}
+
 // ─── Rendering ───────────────────────────────────────────────────────────────
 
 function renderOutput(text, container, submittedBrief = '', natureOfChange = '') {
+  setOutputContext('analyze');
   const sections = extractSections(text);
   container.innerHTML = '';
   latestAnalysisText = text;
@@ -532,6 +577,7 @@ function renderOutput(text, container, submittedBrief = '', natureOfChange = '')
 }
 
 function renderDeliverablesOutput(text, container) {
+  setOutputContext('deliverables');
   const sections = extractDeliverableSections(text);
   container.innerHTML = '';
   latestAnalysisText = text;
@@ -613,12 +659,41 @@ function renderRecommendedAction(content) {
   return wrap;
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatBriefUnderstandingText(content) {
+  return String(content || '')
+    .split(/\r?\n/)
+    .map((line) => {
+      const trimmed = line.trim();
+      const escaped = escapeHtml(line);
+
+      if (/^additional context from pre-brief:?$/i.test(trimmed)) {
+        return `<strong class="brief-line-heading">${escaped}</strong>`;
+      }
+
+      if (/\?$/.test(trimmed)) {
+        return `<strong class="brief-line-question">${escaped}</strong>`;
+      }
+
+      return escaped;
+    })
+    .join('\n');
+}
+
 function renderBriefUnderstanding(content) {
   const wrap = el('div', 'brief-understanding');
   wrap.appendChild(el('div', 'subsection-label', 'Brief Understanding'));
 
   const body = el('div', 'brief-understanding-body');
-  body.textContent = content;
+  body.innerHTML = formatBriefUnderstandingText(content);
   wrap.appendChild(body);
 
   return wrap;
@@ -758,6 +833,9 @@ async function handleSubmit() {
 
   try {
     const result = await analyze(naturePrefix + input);
+    latestFullAnalysisResponse = result;
+    latestFullAnalysisBrief = input;
+    latestFullAnalysisNature = selectedNatureValue;
     renderOutput(result, output, input, selectedNatureValue);
     outputSection.classList.add('visible');
     statusText.textContent = '';
@@ -789,6 +867,7 @@ async function handleDeliverablesSubmit() {
 
   try {
     const result = await buildDeliverables(input);
+    latestDeliverablesResponse = result;
     renderDeliverablesOutput(result, output);
     outputSection.classList.add('visible');
     statusText.textContent = '';
