@@ -163,6 +163,18 @@ textarea::placeholder {
   min-height: 190px;
 }
 
+.prebrief-extra {
+  min-height: 95px;
+}
+
+#research-input {
+  min-height: 180px;
+}
+
+#research-focus {
+  min-height: 95px;
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;
@@ -254,6 +266,12 @@ button:disabled {
   color: #065f46;
   background: #d1fae5;
   border-color: #86efac;
+}
+
+.output-context.mode-research {
+  color: #7c2d12;
+  background: #ffedd5;
+  border-color: #fdba74;
 }
 
 #output {
@@ -363,6 +381,37 @@ button:disabled {
 
 .deliverable-linked-bullets:last-child {
   margin-bottom: 0;
+}
+
+.research-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.research-recommendation {
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.research-recommendation-text {
+  color: #7c2d12;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.research-recommendation-btn {
+  font-size: 0.82rem;
+  padding: 8px 16px;
+  box-shadow: none;
+  background: #9a3412;
+}
+
+.research-recommendation-btn:hover {
+  background: #7c2d12;
 }
 
 /* ── Mode toggle ────────────────────────────────────────────── */

@@ -4,9 +4,11 @@ function setMode(mode) {
   const prebriefPanel = document.getElementById('prebrief-panel');
   const analyzePanel  = document.getElementById('analyze-panel');
   const deliverablesPanel = document.getElementById('deliverables-panel');
+  const researchPanel = document.getElementById('research-panel');
   const btnBrainstorm = document.getElementById('mode-brainstorm');
   const btnAnalyze    = document.getElementById('mode-analyze');
   const btnDeliverables = document.getElementById('mode-deliverables');
+  const btnResearch = document.getElementById('mode-research');
   const outputSection = document.getElementById('output-section');
   const output = document.getElementById('output');
 
@@ -16,28 +18,53 @@ function setMode(mode) {
     prebriefPanel.hidden = false;
     analyzePanel.hidden  = true;
     deliverablesPanel.hidden = true;
+    researchPanel.hidden = true;
     btnBrainstorm.classList.add('active');
     btnAnalyze.classList.remove('active');
     btnDeliverables.classList.remove('active');
+    btnResearch.classList.remove('active');
     outputSection.classList.remove('visible');
   } else if (mode === 'deliverables') {
     prebriefPanel.hidden = true;
     analyzePanel.hidden  = true;
     deliverablesPanel.hidden = false;
+    researchPanel.hidden = true;
     btnBrainstorm.classList.remove('active');
     btnAnalyze.classList.remove('active');
     btnDeliverables.classList.add('active');
+    btnResearch.classList.remove('active');
     if (latestDeliverablesResponse) {
       renderDeliverablesOutput(latestDeliverablesResponse, output);
       outputSection.classList.add('visible');
     }
+  } else if (mode === 'research') {
+    prebriefPanel.hidden = true;
+    analyzePanel.hidden  = true;
+    deliverablesPanel.hidden = true;
+    researchPanel.hidden = false;
+    btnBrainstorm.classList.remove('active');
+    btnAnalyze.classList.remove('active');
+    btnDeliverables.classList.remove('active');
+    btnResearch.classList.add('active');
+    const researchInput = document.getElementById('research-input');
+    const researchFocus = document.getElementById('research-focus');
+    const researchStatus = document.getElementById('research-status');
+
+    if (researchInput) researchInput.value = '';
+    if (researchFocus) researchFocus.value = '';
+    if (researchStatus) researchStatus.textContent = '';
+
+    output.innerHTML = '';
+    outputSection.classList.remove('visible');
   } else {
     prebriefPanel.hidden = true;
     analyzePanel.hidden  = false;
     deliverablesPanel.hidden = true;
+    researchPanel.hidden = true;
     btnBrainstorm.classList.remove('active');
     btnAnalyze.classList.add('active');
     btnDeliverables.classList.remove('active');
+    btnResearch.classList.remove('active');
     if (latestFullAnalysisResponse) {
       renderOutput(
         latestFullAnalysisResponse,
@@ -224,6 +251,7 @@ async function handlePreBrief() {
 
 function handleBuildBrief() {
   const roughIdea = document.getElementById('prebrief-input').value.trim();
+  const extraInfo = document.getElementById('prebrief-extra')?.value.trim() || '';
   const answers = prebriefQuestions.map((q, i) => {
     const val = document.getElementById(`q-${i}`)?.value.trim();
     return val ? `${q}\n${val}` : null;
@@ -241,6 +269,7 @@ function handleBuildBrief() {
   // Compose the full brief text
   const brief = [
     roughIdea,
+    extraInfo ? `\nAny other relevant info:\n${extraInfo}` : '',
     answers.length ? '\nAdditional context from pre-brief:\n' + answers.join('\n\n') : '',
   ].join('\n').trim();
 
@@ -287,6 +316,13 @@ const RATING_CLASS = {
 };
 
 const DELIVERABLE_HEADERS = ['DELIVERABLES', 'BUILD ELEMENTS', 'OUTCOMES'];
+const RESEARCH_HEADERS = [
+  'WHAT SHOULD BE RESEARCHED EXTERNALLY',
+  'WHY THIS MATTERS',
+  'SUGGESTED SOURCES',
+  'ASSUMPTIONS TO CHALLENGE',
+  'NEXT VALIDATION QUESTIONS',
+];
 
 // ─── Markdown helpers ─────────────────────────────────────────────────────────
 
@@ -302,7 +338,16 @@ function renderMarkdown(text) {
     .split('\n')
     .filter(line => !/^\s*\|/.test(line) && !/^\s*[-:|\s]{2,}$/.test(line))
     .join('\n');
-  return marked.parse(noTables);
+  const html = marked.parse(noTables);
+  const template = document.createElement('template');
+  template.innerHTML = html;
+
+  template.content.querySelectorAll('a').forEach((anchor) => {
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+  });
+
+  return template.innerHTML;
 }
 
 // ─── State ───────────────────────────────────────────────────────────────────
@@ -314,6 +359,7 @@ let latestFullAnalysisResponse = '';
 let latestFullAnalysisBrief = '';
 let latestFullAnalysisNature = '';
 let latestDeliverablesResponse = '';
+let latestResearchResponse = '';
 
 // ─── Parsing ─────────────────────────────────────────────────────────────────
 
@@ -363,6 +409,10 @@ function extractSections(text) {
 
 function extractDeliverableSections(text) {
   return parseNamedSections(text, DELIVERABLE_HEADERS);
+}
+
+function extractResearchSections(text) {
+  return parseNamedSections(text, RESEARCH_HEADERS);
 }
 
 function normalizeDeliverableLine(line) {
@@ -513,16 +563,19 @@ function setOutputContext(mode) {
     brainstorm: 'Showing: Pre-brief',
     analyze: 'Showing: Full Analysis',
     deliverables: 'Showing: Deliverables',
+    research: 'Showing: Research',
   };
 
   contextEl.textContent = labels[mode] || 'Showing: Output';
-  contextEl.classList.remove('mode-prebrief', 'mode-analyze', 'mode-deliverables');
+  contextEl.classList.remove('mode-prebrief', 'mode-analyze', 'mode-deliverables', 'mode-research');
   if (mode === 'brainstorm') {
     contextEl.classList.add('mode-prebrief');
   } else if (mode === 'analyze') {
     contextEl.classList.add('mode-analyze');
   } else if (mode === 'deliverables') {
     contextEl.classList.add('mode-deliverables');
+  } else if (mode === 'research') {
+    contextEl.classList.add('mode-research');
   }
   contextEl.hidden = false;
 }
@@ -574,6 +627,49 @@ function renderOutput(text, container, submittedBrief = '', natureOfChange = '')
       container.appendChild(renderCollapsible(header, sectionMap[header]));
     }
   });
+
+  if (shouldRecommendResearch(sectionMap)) {
+    container.appendChild(renderResearchRecommendation(sectionMap));
+  }
+}
+
+function countSignalLines(text) {
+  if (!text) return 0;
+  const lines = String(text)
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  const bulletCount = lines.filter(line => /^[-*]\s+/.test(line) || /^\d+[.)]\s+/.test(line)).length;
+  return bulletCount || lines.length;
+}
+
+function shouldRecommendResearch(sectionMap) {
+  const uncertainty = sectionMap['WHAT IS GENUINELY UNCERTAIN'] || '';
+  if (!uncertainty) return false;
+
+  const signalCount = countSignalLines(uncertainty);
+  const hasGapSignals = /(BRIEF GAP|UNKNOWN|PM DECISION)/i.test(uncertainty);
+  return signalCount >= 3 || hasGapSignals;
+}
+
+function renderResearchRecommendation(sectionMap) {
+  const card = el('div', 'research-recommendation');
+  card.appendChild(el('div', 'subsection-label', 'Recommended Next Step'));
+
+  const text = el('p', 'research-recommendation-text',
+    'Uncertainty is high enough that external validation could improve decision quality before locking scope.');
+  card.appendChild(text);
+
+  const button = el('button', 'research-recommendation-btn', 'Run Research Next');
+  button.type = 'button';
+  button.addEventListener('click', () => {
+    setMode('research');
+    document.getElementById('research-input')?.focus();
+  });
+
+  card.appendChild(button);
+  return card;
 }
 
 function renderDeliverablesOutput(text, container) {
@@ -634,6 +730,37 @@ function renderDeliverablesOutput(text, container) {
   });
 
   wrap.appendChild(list);
+  container.appendChild(wrap);
+}
+
+function renderResearchOutput(text, container) {
+  setOutputContext('research');
+  const sections = extractResearchSections(text);
+  container.innerHTML = '';
+  latestAnalysisText = text;
+  latestRenderedSections = sections;
+  latestReportType = 'research';
+  setDownloadState(true);
+
+  if (!sections.length) {
+    const body = el('div', 'section-body');
+    body.innerHTML = renderMarkdown(text);
+    container.appendChild(body);
+    return;
+  }
+
+  const headingMap = {
+    'WHAT SHOULD BE RESEARCHED EXTERNALLY': 'What Should Be Researched Externally',
+    'WHY THIS MATTERS': 'Why This Matters',
+    'SUGGESTED SOURCES': 'Suggested Sources',
+    'ASSUMPTIONS TO CHALLENGE': 'Assumptions to Challenge',
+    'NEXT VALIDATION QUESTIONS': 'Next Validation Questions',
+  };
+
+  const wrap = el('div', 'research-section');
+  sections.forEach(({ header, content }) => {
+    wrap.appendChild(renderCollapsible(headingMap[header] || header, content));
+  });
   container.appendChild(wrap);
 }
 
@@ -799,9 +926,13 @@ function downloadReport() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = latestReportType === 'deliverables'
-    ? 'pm-brainstorm-deliverables.txt'
-    : 'pm-brainstorm-analysis.txt';
+  if (latestReportType === 'deliverables') {
+    link.download = 'pm-brainstorm-deliverables.txt';
+  } else if (latestReportType === 'research') {
+    link.download = 'pm-brainstorm-research.txt';
+  } else {
+    link.download = 'pm-brainstorm-analysis.txt';
+  }
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -882,6 +1013,43 @@ async function handleDeliverablesSubmit() {
   }
 }
 
+async function handleResearchSubmit() {
+  const brief = document.getElementById('research-input').value.trim();
+  if (!brief) return;
+
+  const focus = document.getElementById('research-focus').value.trim();
+  const text = focus
+    ? `${brief}\n\nResearch focus:\n${focus}`
+    : brief;
+
+  const btn = document.getElementById('research-btn');
+  const spinner = document.getElementById('research-spinner');
+  const statusText = document.getElementById('research-status');
+  const outputSection = document.getElementById('output-section');
+  const output = document.getElementById('output');
+
+  btn.disabled = true;
+  spinner.classList.add('visible');
+  statusText.textContent = 'Researching…';
+  outputSection.classList.remove('visible');
+
+  try {
+    const result = await buildResearch(text);
+    latestResearchResponse = result;
+    renderResearchOutput(result, output);
+    outputSection.classList.add('visible');
+    statusText.textContent = '';
+  } catch (err) {
+    renderError(`Error: ${err.message}`, output);
+    outputSection.classList.add('visible');
+    statusText.textContent = 'Request failed.';
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('visible');
+  }
+}
+
 async function analyze(text) {
   const response = await fetch('/api/analyze', {
     method: 'POST',
@@ -914,6 +1082,22 @@ async function buildDeliverables(text) {
   return data.text;
 }
 
+async function buildResearch(text) {
+  const response = await fetch('/api/research', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.text;
+}
+
 // ─── Events ───────────────────────────────────────────────────────────────────
 
 document.getElementById('input').addEventListener('keydown', (e) => {
@@ -922,6 +1106,14 @@ document.getElementById('input').addEventListener('keydown', (e) => {
 
 document.getElementById('deliverables-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleDeliverablesSubmit();
+});
+
+document.getElementById('research-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleResearchSubmit();
+});
+
+document.getElementById('research-focus').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleResearchSubmit();
 });
 
 document.getElementById('download-btn').addEventListener('click', downloadReport);
@@ -936,3 +1128,4 @@ document.querySelectorAll('input[name="nature"]').forEach(radio => {
 document.getElementById('mode-brainstorm').addEventListener('click', () => setMode('brainstorm'));
 document.getElementById('mode-analyze').addEventListener('click', () => setMode('analyze'));
 document.getElementById('mode-deliverables').addEventListener('click', () => setMode('deliverables'));
+document.getElementById('mode-research').addEventListener('click', () => setMode('research'));
