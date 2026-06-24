@@ -17,6 +17,7 @@
     <div class="mode-toggle">
       <button id="mode-brainstorm" class="mode-btn active" type="button">Pre-brief</button>
       <button id="mode-analyze" class="mode-btn" type="button">Full analysis</button>
+      <button id="mode-research" class="mode-btn" type="button">Research</button>
       <button id="mode-deliverables" class="mode-btn" type="button">Deliverables</button>
     </div>
 
@@ -27,6 +28,13 @@
         <textarea
           id="prebrief-input"
           placeholder="Describe your idea in a sentence or two. Don't worry about completeness — that's what this step is for."
+          spellcheck="true"
+        ></textarea>
+        <label for="prebrief-extra" style="margin-top:14px">Any other relevant info</label>
+        <textarea
+          id="prebrief-extra"
+          class="prebrief-extra"
+          placeholder="Optional: constraints, dependencies, known risks, or context that could shape scoping"
           spellcheck="true"
         ></textarea>
         <div class="actions">
@@ -112,6 +120,34 @@
         <div class="status">
           <div class="spinner" id="deliverables-spinner"></div>
           <span id="deliverables-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Research panel -->
+    <div id="research-panel" hidden>
+      <div class="card">
+        <label for="research-input">Brief to investigate</label>
+        <p class="learning-note">Use this to identify what should be checked externally for this brief, not to restate the brief itself.</p>
+        <textarea
+          id="research-input"
+          placeholder="Paste the brief. This mode will suggest what needs external research, not summarize the brief."
+          spellcheck="true"
+        ></textarea>
+
+        <label for="research-focus" style="margin-top:14px">What should be checked externally? (optional)</label>
+        <textarea
+          id="research-focus"
+          placeholder="Optional: e.g. UK SCA implications, scheme certification signals, partner readiness benchmarks"
+          spellcheck="true"
+        ></textarea>
+
+        <div class="actions">
+          <button id="research-btn" type="button" onclick="handleResearchSubmit()">Run research</button>
+        </div>
+        <div class="status">
+          <div class="spinner" id="research-spinner"></div>
+          <span id="research-status"></span>
         </div>
       </div>
     </div>
