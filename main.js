@@ -15,6 +15,7 @@ function setMode(mode) {
   setOutputContext(mode);
 
   if (mode === 'brainstorm') {
+    latestReportType = 'analysis';
     prebriefPanel.hidden = false;
     analyzePanel.hidden  = true;
     deliverablesPanel.hidden = true;
@@ -23,8 +24,10 @@ function setMode(mode) {
     btnAnalyze.classList.remove('active');
     btnDeliverables.classList.remove('active');
     btnResearch.classList.remove('active');
+    output.innerHTML = '';
     outputSection.classList.remove('visible');
   } else if (mode === 'deliverables') {
+    latestReportType = 'deliverables';
     prebriefPanel.hidden = true;
     analyzePanel.hidden  = true;
     deliverablesPanel.hidden = false;
@@ -36,8 +39,13 @@ function setMode(mode) {
     if (latestDeliverablesResponse) {
       renderDeliverablesOutput(latestDeliverablesResponse, output);
       outputSection.classList.add('visible');
+    } else {
+      output.innerHTML = '';
+      outputSection.classList.remove('visible');
+      setDownloadState(false);
     }
   } else if (mode === 'research') {
+    latestReportType = 'research';
     prebriefPanel.hidden = true;
     analyzePanel.hidden  = true;
     deliverablesPanel.hidden = true;
@@ -56,7 +64,9 @@ function setMode(mode) {
 
     output.innerHTML = '';
     outputSection.classList.remove('visible');
+    setDownloadState(false);
   } else {
+    latestReportType = 'analysis';
     prebriefPanel.hidden = true;
     analyzePanel.hidden  = false;
     deliverablesPanel.hidden = true;
@@ -73,6 +83,10 @@ function setMode(mode) {
         latestFullAnalysisNature
       );
       outputSection.classList.add('visible');
+    } else {
+      output.innerHTML = '';
+      outputSection.classList.remove('visible');
+      setDownloadState(false);
     }
   }
 }
@@ -905,18 +919,211 @@ function renderError(message, container) {
 
 function setDownloadState(enabled) {
   const btn = document.getElementById('download-btn');
-  if (!btn) return;
+  const htmlBtn = document.getElementById('download-html-btn');
+  if (!btn || !htmlBtn) return;
+
+  if (enabled) {
+    if (latestReportType === 'deliverables') {
+      btn.textContent = 'Download deliverables';
+    } else if (latestReportType === 'research') {
+      btn.textContent = 'Download research';
+    } else {
+      btn.textContent = 'Download TXT';
+    }
+  } else {
+    btn.textContent = 'Download TXT';
+  }
+
   btn.hidden = !enabled;
   btn.disabled = !enabled;
+  htmlBtn.hidden = !enabled;
+  htmlBtn.disabled = !enabled;
 }
 
 function buildDownloadText(text, sections) {
-  if (!sections.length) return text.trim();
-  const lines = ['PM Brainstorm Analysis', ''];
+  const titleMap = {
+    analysis: 'PM Brainstorm Analysis',
+    deliverables: 'PM Brainstorm Deliverables',
+    research: 'PM Brainstorm Research',
+  };
+  const title = titleMap[latestReportType] || 'PM Brainstorm Report';
+  const lines = [`# ${title}`, ''];
+
+  if (latestReportType === 'analysis' && latestFullAnalysisBrief) {
+    lines.push('## Brief Understanding', '', latestFullAnalysisBrief.trim(), '');
+  }
+
+  if (!sections.length) {
+    lines.push(text.trim());
+    return lines.join('\n').trim();
+  }
+
   sections.forEach(({ header, content }) => {
-    lines.push(header, '-'.repeat(header.length), '', content.trim(), '');
+    lines.push(`## ${header}`, '', (content || '').trim(), '');
   });
+
   return lines.join('\n').trim();
+}
+
+function buildDownloadHtml(text, sections, options = {}) {
+  const { autoPrint = false } = options;
+  const titleMap = {
+    analysis: 'PM Brainstorm Analysis',
+    deliverables: 'PM Brainstorm Deliverables',
+    research: 'PM Brainstorm Research',
+  };
+  const title = titleMap[latestReportType] || 'PM Brainstorm Report';
+  const generatedAt = new Date().toLocaleString();
+
+  let bodySections = '';
+
+  if (latestReportType === 'analysis' && latestFullAnalysisBrief) {
+    bodySections += `
+      <section class="card">
+        <h2>Brief Understanding</h2>
+        <pre>${escapeHtml(latestFullAnalysisBrief)}</pre>
+      </section>
+    `;
+  }
+
+  if (sections.length) {
+    bodySections += sections.map(({ header, content }) => `
+      <section class="card">
+        <h2>${escapeHtml(header)}</h2>
+        <div class="content">${renderMarkdown(content || '')}</div>
+      </section>
+    `).join('');
+  } else {
+    bodySections += `
+      <section class="card">
+        <h2>Output</h2>
+        <div class="content">${renderMarkdown(text || '')}</div>
+      </section>
+    `;
+  }
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6fb;
+      --ink: #0f172a;
+      --muted: #475569;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --accent: #0f766e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 28px;
+      background: linear-gradient(180deg, #f8fafc, var(--bg));
+      font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      color: var(--ink);
+      line-height: 1.65;
+    }
+    .container {
+      max-width: 980px;
+      margin: 0 auto;
+    }
+    .header {
+      margin-bottom: 18px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.65rem;
+      letter-spacing: -0.02em;
+    }
+    .meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .badge {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 2px 10px;
+      font-size: 0.75rem;
+      border-radius: 999px;
+      color: #fff;
+      background: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin: 0 0 12px;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+      break-inside: avoid;
+    }
+    h2 {
+      margin: 0 0 8px;
+      font-size: 0.88rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #334155;
+    }
+    .content p { margin: 0 0 0.6em; }
+    .content p:last-child { margin-bottom: 0; }
+    .content ul, .content ol { margin: 0.2em 0 0.8em; padding-left: 1.2em; }
+    .content li { margin-bottom: 0.25em; }
+    .content a { color: #0369a1; text-decoration: underline; }
+    pre {
+      margin: 0;
+      padding: 10px 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      font-family: inherit;
+      font-size: 0.93rem;
+      color: #1e293b;
+    }
+    @media print {
+      body {
+        padding: 0;
+        background: #fff;
+      }
+      .container {
+        max-width: 100%;
+      }
+      .card {
+        box-shadow: none;
+        border-color: #d1d5db;
+      }
+      a {
+        color: #0f172a;
+        text-decoration: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <h1>${escapeHtml(title)}</h1>
+      <div class="meta">Generated ${escapeHtml(generatedAt)}<span class="badge">${escapeHtml(latestReportType)}</span></div>
+    </header>
+    ${bodySections}
+  </main>
+  ${autoPrint ? `<script>
+    window.addEventListener('load', () => {
+      window.print();
+    });
+  </script>` : ''}
+</body>
+</html>`;
 }
 
 function downloadReport() {
@@ -932,6 +1139,27 @@ function downloadReport() {
     link.download = 'pm-brainstorm-research.txt';
   } else {
     link.download = 'pm-brainstorm-analysis.txt';
+  }
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function downloadHtmlReport() {
+  if (!latestAnalysisText) return;
+
+  const reportHtml = buildDownloadHtml(latestAnalysisText, latestRenderedSections, { autoPrint: false });
+  const blob = new Blob([reportHtml], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  if (latestReportType === 'deliverables') {
+    link.download = 'pm-brainstorm-deliverables.html';
+  } else if (latestReportType === 'research') {
+    link.download = 'pm-brainstorm-research.html';
+  } else {
+    link.download = 'pm-brainstorm-analysis.html';
   }
   document.body.appendChild(link);
   link.click();
@@ -1117,6 +1345,7 @@ document.getElementById('research-focus').addEventListener('keydown', (e) => {
 });
 
 document.getElementById('download-btn').addEventListener('click', downloadReport);
+document.getElementById('download-html-btn').addEventListener('click', downloadHtmlReport);
 
 document.querySelectorAll('input[name="nature"]').forEach(radio => {
   radio.addEventListener('change', () => {
