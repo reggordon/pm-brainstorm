@@ -240,6 +240,12 @@ button:disabled {
   gap: 10px;
 }
 
+.output-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .output-context {
   font-size: 0.75rem;
   color: #6b7280;
